@@ -1,0 +1,137 @@
+# Gateway Plugins Deployment for AIBrix
+# This is the ExtProc service that handles routing and load balancing
+
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: aibrix-gateway-plugins
+  namespace: aibrix-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: aibrix-gateway-plugins
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "endpoints"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["model.aibrix.ai"]
+  resources: ["modeladapters"]
+  verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: aibrix-gateway-plugins
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: aibrix-gateway-plugins
+subjects:
+- kind: ServiceAccount
+  name: aibrix-gateway-plugins
+  namespace: aibrix-system
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: aibrix-gateway-plugins
+  namespace: aibrix-system
+  labels:
+    app: aibrix-gateway-plugins
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+spec:
+  type: ClusterIP
+  selector:
+    app: aibrix-gateway-plugins
+  ports:
+    - name: gateway
+      protocol: TCP
+      port: 50052
+      targetPort: 50052
+    - name: profiling
+      protocol: TCP
+      port: 6060
+      targetPort: 6060
+    - name: metrics
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: aibrix-gateway-plugins
+  namespace: aibrix-system
+  labels:
+    app: aibrix-gateway-plugins
+spec:
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  replicas: 1
+  selector:
+    matchLabels:
+      app: aibrix-gateway-plugins
+  template:
+    metadata:
+      labels:
+        app: aibrix-gateway-plugins
+    spec:
+      serviceAccountName: aibrix-gateway-plugins
+      initContainers:
+        - name: init-redis
+          image: busybox:1.36
+          command: ['sh', '-c', 'until echo "ping" | nc aibrix-redis-master 6379 -w 1 | grep -c PONG; do echo "Waiting for Redis..."; sleep 2; done; echo "Redis is ready"']
+      containers:
+        - name: gateway-plugin
+          image: aibrix/gateway-plugins:nightly
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: gateway
+              containerPort: 50052
+            - name: profiling
+              containerPort: 6060
+            - name: metrics
+              containerPort: 8080
+          resources:
+            limits:
+              cpu: "1"
+              memory: 1Gi
+            requests:
+              cpu: "500m"
+              memory: 512Mi
+          env:
+            - name: REDIS_HOST
+              value: aibrix-redis-master
+            - name: REDIS_PORT
+              value: "6379"
+            - name: AIBRIX_POD_METRIC_REFRESH_INTERVAL_MS
+              value: "50"
+            - name: AIBRIX_PREFIX_CACHE_TOKENIZER_TYPE
+              value: "character"
+            - name: AIBRIX_PREFIX_CACHE_BLOCK_SIZE
+              value: "128"
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+          livenessProbe:
+            grpc:
+              port: 50052
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            grpc:
+              port: 50052
+            initialDelaySeconds: 5
+            periodSeconds: 10

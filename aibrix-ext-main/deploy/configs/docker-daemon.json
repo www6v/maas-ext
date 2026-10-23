@@ -1,0 +1,15 @@
+{
+  "data-root": "/data/docker",
+  "storage-driver": "overlay2",
+  "registry-mirrors": [
+    "https://docker.m.daocloud.io",
+    "https://dockerhub.azk8s.cn"
+  ],
+  "runtimes": {
+    "nvidia": {
+      "path": "nvidia-container-runtime",
+      "runtimeArgs": []
+    }
+  },
+  "default-runtime": "nvidia"
+}

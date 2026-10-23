@@ -1,0 +1,126 @@
+# vLLM Deployment for AIBrix
+# Model: Qwen3.5-4B (from ModelScope)
+# GPU: NVIDIA RTX 3090
+# Note: First startup takes 5-8 minutes due to FlashInfer JIT + torch.compile + CUDA graphs
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-service
+  namespace: default
+  labels:
+    app: vllm
+    model: qwen3.5-4b
+    model.aibrix.ai/name: qwen3.5-4b
+spec:
+  type: ClusterIP
+  ports:
+  - port: 8000
+    targetPort: 8000
+    protocol: TCP
+    name: http
+  selector:
+    app: vllm
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-qwen35-4b
+  namespace: default
+  labels:
+    app: vllm
+    model: qwen3.5-4b
+    aibrix.io/model: qwen3.5-4b
+    model.aibrix.ai/name: qwen3.5-4b
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm
+      model: qwen3.5-4b
+  template:
+    metadata:
+      labels:
+        app: vllm
+        model: qwen3.5-4b
+        aibrix.io/model: qwen3.5-4b
+        model.aibrix.ai/name: qwen3.5-4b
+    spec:
+      containers:
+      - name: vllm
+        image: vllm-local:qwen3.5-4b
+        imagePullPolicy: IfNotPresent
+        command: ["python3.11"]
+        args:
+        - "-m"
+        - "vllm.entrypoints.openai.api_server"
+        - "--model"
+        - "/models/Qwen--Qwen3.5-4B/snapshots/master"
+        - "--served-model-name"
+        - "qwen3.5-4b"
+        - "--host"
+        - "0.0.0.0"
+        - "--port"
+        - "8000"
+        - "--trust-remote-code"
+        - "--max-model-len"
+        - "8192"
+        - "--gpu-memory-utilization"
+        - "0.90"
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        - name: MODEL_PATH
+          value: "/models/Qwen--Qwen3.5-4B/snapshots/master"
+        - name: VLLM_USAGE_SOURCE
+          value: "production"
+        - name: HF_HOME
+          value: "/tmp/hf_cache"
+        - name: VLLM_WORKER_MULTIPROC_METHOD
+          value: "spawn"
+        - name: PATH
+          value: "/usr/local/cuda/bin:/usr/local/bin:/usr/bin:/bin"
+        resources:
+          limits:
+            cpu: "8"
+            memory: 16Gi
+            nvidia.com/gpu: "1"
+          requests:
+            cpu: "4"
+            memory: 8Gi
+            nvidia.com/gpu: "1"
+        volumeMounts:
+        - name: model-storage
+          mountPath: /models
+          readOnly: true
+        - name: shm
+          mountPath: /dev/shm
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 600
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 120
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 60
+      volumes:
+      - name: model-storage
+        hostPath:
+          path: /root/models
+          type: Directory
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 2Gi
+      nodeSelector:
+        kubernetes.io/os: linux

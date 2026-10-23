@@ -1,0 +1,28 @@
+# Redis running on host machine - accessible via docker0 bridge (172.17.0.1:6379)
+apiVersion: v1
+kind: Service
+metadata:
+  name: aibrix-redis-master
+  namespace: aibrix-system
+  labels:
+    app: redis
+    role: master
+    tier: backend
+spec:
+  clusterIP: None   # Headless service - we'll create Endpoints manually
+  ports:
+  - port: 6379
+    targetPort: 6379
+  # No selector - we'll manually define endpoints
+---
+apiVersion: v1
+kind: Endpoints
+metadata:
+  name: aibrix-redis-master
+  namespace: aibrix-system
+subsets:
+- addresses:
+  - ip: 172.17.0.1   # docker0 bridge IP - host machine
+  ports:
+  - port: 6379
+    protocol: TCP

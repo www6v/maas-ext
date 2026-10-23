@@ -1,0 +1,14 @@
+# Build artifacts
+build/
+
+# Logs
+*.log
+logs/
+
+# Binaries
+deploy/bin/
+
+# Python
+__pycache__/
+*.pyc
+.venv/

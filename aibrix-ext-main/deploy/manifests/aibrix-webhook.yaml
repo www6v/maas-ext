@@ -1,0 +1,208 @@
+# AIBrix Webhook 资源
+# controller-manager 的 cert-rotator 需要这些资源预存在
+---
+# 1. 空的 Secret - cert-rotator 会填充证书
+apiVersion: v1
+kind: Secret
+metadata:
+  name: aibrix-webhook-server-cert
+  namespace: aibrix-system
+  labels:
+    app.kubernetes.io/name: aibrix
+    app.kubernetes.io/component: aibrix-controller-manager
+type: kubernetes.io/tls
+data:
+  tls.crt: ""
+  tls.key: ""
+---
+# 2. Webhook Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: aibrix-webhook-service
+  namespace: aibrix-system
+  labels:
+    app.kubernetes.io/name: aibrix
+    app.kubernetes.io/component: aibrix-controller-manager
+spec:
+  ports:
+    - name: webhook
+      port: 443
+      protocol: TCP
+      targetPort: 9443
+  selector:
+    control-plane: controller-manager
+---
+# 3. MutatingWebhookConfiguration
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: aibrix-mutating-webhook-configuration
+  labels:
+    app.kubernetes.io/name: aibrix
+    app.kubernetes.io/component: aibrix-controller-manager
+webhooks:
+- admissionReviewVersions: [v1]
+  clientConfig:
+    service:
+      name: aibrix-webhook-service
+      namespace: aibrix-system
+      path: /mutate-orchestration-aibrix-ai-v1alpha1-kvcache
+  failurePolicy: Ignore
+  name: mkvcache-v1alpha1.kb.io
+  rules:
+  - apiGroups: [orchestration.aibrix.ai]
+    apiVersions: [v1alpha1]
+    operations: [CREATE, UPDATE]
+    resources: [kvcaches]
+  sideEffects: None
+- admissionReviewVersions: [v1]
+  clientConfig:
+    service:
+      name: aibrix-webhook-service
+      namespace: aibrix-system
+      path: /mutate-model-aibrix-ai-v1alpha1-modeladapter
+  failurePolicy: Ignore
+  name: mmodeladapter.kb.io
+  rules:
+  - apiGroups: [model.aibrix.ai]
+    apiVersions: [v1alpha1]
+    operations: [CREATE, UPDATE]
+    resources: [modeladapters]
+  sideEffects: None
+- admissionReviewVersions: [v1]
+  clientConfig:
+    service:
+      name: aibrix-webhook-service
+      namespace: aibrix-system
+      path: /mutate-autoscaling-aibrix-ai-v1alpha1-podautoscaler
+  failurePolicy: Ignore
+  name: mpodautoscaler-v1alpha1.kb.io
+  rules:
+  - apiGroups: [autoscaling.aibrix.ai]
+    apiVersions: [v1alpha1]
+    operations: [CREATE, UPDATE]
+    resources: [podautoscalers]
+  sideEffects: None
+- admissionReviewVersions: [v1]
+  clientConfig:
+    service:
+      name: aibrix-webhook-service
+      namespace: aibrix-system
+      path: /mutate-orchestration-aibrix-ai-v1alpha1-stormservice
+  failurePolicy: Ignore
+  name: mstormservice.kb.io
+  rules:
+  - apiGroups: [orchestration.aibrix.ai]
+    apiVersions: [v1alpha1]
+    operations: [CREATE, UPDATE]
+    resources: [stormservices]
+  sideEffects: None
+- admissionReviewVersions: [v1]
+  clientConfig:
+    service:
+      name: aibrix-webhook-service
+      namespace: aibrix-system
+      path: /mutate-apps-v1-deployment
+  failurePolicy: Ignore
+  name: medeployment.aibrix.ai
+  rules:
+  - apiGroups: [apps]
+    apiVersions: [v1]
+    operations: [CREATE, UPDATE]
+    resources: [deployments]
+  sideEffects: None
+---
+# 4. ValidatingWebhookConfiguration
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  name: aibrix-validating-webhook-configuration
+  labels:
+    app.kubernetes.io/name: aibrix
+    app.kubernetes.io/component: aibrix-controller-manager
+webhooks:
+- admissionReviewVersions: [v1]
+  clientConfig:
+    service:
+      name: aibrix-webhook-service
+      namespace: aibrix-system
+      path: /validate-model-aibrix-ai-v1alpha1-modeladapter
+  failurePolicy: Ignore
+  name: vmodeladapter.kb.io
+  rules:
+  - apiGroups: [model.aibrix.ai]
+    apiVersions: [v1alpha1]
+    operations: [CREATE, UPDATE]
+    resources: [modeladapters]
+  sideEffects: None
+- admissionReviewVersions: [v1]
+  clientConfig:
+    service:
+      name: aibrix-webhook-service
+      namespace: aibrix-system
+      path: /validate-orchestration-aibrix-ai-v1alpha1-kvcache
+  failurePolicy: Ignore
+  name: vkvcache-v1alpha1.kb.io
+  rules:
+  - apiGroups: [orchestration.aibrix.ai]
+    apiVersions: [v1alpha1]
+    operations: [CREATE, UPDATE]
+    resources: [kvcaches]
+  sideEffects: None
+- admissionReviewVersions: [v1]
+  clientConfig:
+    service:
+      name: aibrix-webhook-service
+      namespace: aibrix-system
+      path: /validate-autoscaling-aibrix-ai-v1alpha1-podautoscaler
+  failurePolicy: Ignore
+  name: vpodautoscaler-v1alpha1.kb.io
+  rules:
+  - apiGroups: [autoscaling.aibrix.ai]
+    apiVersions: [v1alpha1]
+    operations: [CREATE, UPDATE]
+    resources: [podautoscalers]
+  sideEffects: None
+- admissionReviewVersions: [v1]
+  clientConfig:
+    service:
+      name: aibrix-webhook-service
+      namespace: aibrix-system
+      path: /validate-orchestration-aibrix-ai-v1alpha1-stormservice
+  failurePolicy: Ignore
+  name: vstormservice.kb.io
+  rules:
+  - apiGroups: [orchestration.aibrix.ai]
+    apiVersions: [v1alpha1]
+    operations: [CREATE, UPDATE]
+    resources: [stormservices]
+  sideEffects: None
+- admissionReviewVersions: [v1]
+  clientConfig:
+    service:
+      name: aibrix-webhook-service
+      namespace: aibrix-system
+      path: /validate-orchestration-aibrix-ai-v1alpha1-stormservice-scale
+  failurePolicy: Ignore
+  name: vstormservicescale.kb.io
+  rules:
+  - apiGroups: [orchestration.aibrix.ai]
+    apiVersions: [v1alpha1]
+    operations: [UPDATE]
+    resources: [stormservices/scale]
+  sideEffects: None
+- admissionReviewVersions: [v1]
+  clientConfig:
+    service:
+      name: aibrix-webhook-service
+      namespace: aibrix-system
+      path: /validate-apps-v1-deployment
+  failurePolicy: Ignore
+  name: vedeployment.aibrix.ai
+  rules:
+  - apiGroups: [apps]
+    apiVersions: [v1]
+    operations: [CREATE, UPDATE]
+    resources: [deployments]
+  sideEffects: None
