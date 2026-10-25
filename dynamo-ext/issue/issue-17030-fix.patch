@@ -1,0 +1,36 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index XXXXXXX..XXXXXXX 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -74,8 +74,8 @@ dynamo-parsers = { version = "=10.0.7" }
+
+ # Published on crates.io. To see all available versions:
+ #   web:          https://crates.io/crates/dynamo-parsers-v2/versions
+ #   sparse index: curl https://index.crates.io/dy/na/dynamo-parsers-v2   (one JSON line per release; read the "vers" field)
+-# Native count-before-string early streaming still needs a frontend-crates fix.
+-dynamo-parsers-v2 = { version = "=0.7.24" }
++# Native count-before-string early streaming support added in 0.8.0.
++dynamo-parsers-v2 = { version = "=0.8.0" }
+ dynamo-backend-common = { path = "lib/backend-common", version = "1.7.0" }
+ dynamo-sidecar-common = { path = "lib/sidecar/common", version = "1.7.0" }
+
+diff --git a/lib/llm/src/protocols/openai/chat_completions/unified_parser.rs b/lib/llm/src/protocols/openai/chat_completions/unified_parser.rs
+index XXXXXXX..XXXXXXX 100644
+--- a/lib/llm/src/protocols/openai/chat_completions/unified_parser.rs
++++ b/lib/llm/src/protocols/openai/chat_completions/unified_parser.rs
+@@ -10020,7 +10020,6 @@ mod tests {
+     }
+
+     #[test]
+-    #[ignore = "Run explicitly to measure upstream native argument progress"]
+     fn eight_family_native_argument_progress_matrix() {
+         argument_progress_matrix(false);
+     }
+@@ -10561,7 +10560,6 @@ mod tests {
+                     family_native_progress_and_exact_arguments($family, false).await;
+                 }
+                 #[tokio::test]
+-                #[ignore = "TODO: native count-before-string early delivery; run explicitly against the selected release"]
+                 async fn native_progress() {
+                     family_native_progress_and_exact_arguments($family, true).await;
+                 }

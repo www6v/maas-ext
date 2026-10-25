@@ -1,0 +1,60 @@
+# Dynamo vLLM Runtime with nvcc (CUDA compiler)
+# 解决 FlashInfer JIT 编译需要 nvcc 的问题
+FROM nvidia/cuda:12.1.1-base-ubuntu22.04
+
+ENV PIP_PROXY=http://127.0.0.1:7897
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 1. 安装 Python + 基础依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-dev \
+    curl \
+    ca-certificates \
+    gnupg \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3 /usr/bin/python
+
+# 2. 添加 NVIDIA CUDA apt 源并安装 nvcc
+RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb \
+    && dpkg -i /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends cuda-nvcc-12-1 cuda-cudart-dev-12-1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/local/cuda-12.1 /usr/local/cuda
+
+# 3. 验证 nvcc 可用
+RUN nvcc --version && echo "✓ nvcc installed successfully"
+
+# 4. 升级 pip
+RUN python3 -m pip install --upgrade pip setuptools wheel
+
+# 5. 安装 vLLM
+RUN python3 -m pip install --proxy=$PIP_PROXY --no-cache-dir vllm==0.28.0
+
+# 6. 安装 Dynamo + 依赖
+RUN python3 -m pip install --proxy=$PIP_PROXY --no-cache-dir \
+    ai-dynamo==1.6.0 \
+    ai-dynamo-runtime==1.6.0 \
+    nixl \
+    pyzmq \
+    msgspec \
+    kubernetes \
+    prometheus_client \
+    huggingface_hub \
+    transformers
+
+# 7. 最终验证
+RUN python3 -c "import vllm; print('vLLM:', vllm.__version__)" && \
+    python3 -c "import dynamo; print('Dynamo: OK')" && \
+    python3 -c "import nixl; print('NIXL: OK')" && \
+    nvcc --version && \
+    echo "✓ Build successful - nvcc available!"
+
+WORKDIR /workspace
+ENV HF_HOME=/tmp/hf_cache
+ENV VLLM_WORKER_MULTIPROC_METHOD=spawn
+
+CMD ["bash"]

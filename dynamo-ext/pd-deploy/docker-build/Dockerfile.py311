@@ -1,0 +1,77 @@
+# 使用 Python 3.11 构建 Dynamo vLLM Runtime
+FROM nvidia/cuda:12.1.1-base-ubuntu22.04
+
+ENV PIP_PROXY=http://127.0.0.1:7897
+ENV DEBIAN_FRONTEND=noninteractive
+
+# 1. 安装 Python 3.11（通过 deadsnakes PPA）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    curl \
+    ca-certificates \
+    gnupg \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    python3.11 \
+    python3.11-dev \
+    python3.11-venv \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.11 /usr/bin/python
+
+# 2. 添加 NVIDIA CUDA 源并安装 nvcc
+RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb \
+    && dpkg -i /tmp/cuda-keyring.deb \
+    && rm /tmp/cuda-keyring.deb \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends cuda-nvcc-12-1 cuda-cudart-dev-12-1 \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/local/cuda-12.1 /usr/local/cuda
+
+# 3. 验证 nvcc
+RUN nvcc --version && echo "✓ nvcc installed"
+
+# 4. 升级 pip
+RUN python3 -m pip install --upgrade pip setuptools wheel
+
+# 5. 安装 vLLM（使用 Python 3.11 兼容版本）
+RUN python3 -m pip install --proxy=$PIP_PROXY --no-cache-dir vllm==0.28.0
+
+# 6. 安装 Dynamo
+RUN python3 -m pip install --proxy=$PIP_PROXY --no-cache-dir \
+    ai-dynamo==1.6.0 \
+    ai-dynamo-runtime==1.6.0 \
+    nixl \
+    pyzmq \
+    msgspec \
+    kubernetes \
+    prometheus_client \
+    huggingface_hub \
+    transformers
+
+# 7. 安装 libc++ 开发包（解决 TVM FFI 编译问题）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libc++-dev libc++abi-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# 8. 复制 curand 头文件（如果存在）
+RUN mkdir -p /usr/local/cuda/include && \
+    (cp /usr/local/lib/python3.11/dist-packages/nvidia/cu13/include/curand*.h /usr/local/cuda/include/ 2>/dev/null || \
+     cp /usr/local/lib/python3.11/dist-packages/nvidia/cuda_nvcc/include/curand*.h /usr/local/cuda/include/ 2>/dev/null || \
+     echo "curand headers will be available through pip packages")
+
+# 9. 最终验证
+RUN python3 -c "import vllm; print('vLLM:', vllm.__version__)" && \
+    python3 -c "import dynamo; print('Dynamo: OK')" && \
+    python3 -c "import nixl; print('NIXL: OK')" && \
+    nvcc --version && \
+    python3 --version && \
+    echo "✓ Build successful with Python 3.11!"
+
+WORKDIR /workspace
+ENV HF_HOME=/tmp/hf_cache
+ENV VLLM_WORKER_MULTIPROC_METHOD=spawn
+ENV CUDA_HOME=/usr/local/cuda
+
+CMD ["bash"]

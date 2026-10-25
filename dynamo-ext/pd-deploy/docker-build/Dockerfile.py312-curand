@@ -1,0 +1,19 @@
+FROM nvcr.io/nvidia/ai-dynamo/vllm-runtime:py312
+
+USER root
+
+# 安装 curand 头文件
+RUN mkdir -p /usr/local/cuda/include && \
+    cp /usr/local/lib/python3.12/dist-packages/nvidia/cuda_nvcc/include/curand*.h /usr/local/cuda/include/ 2>/dev/null || \
+    cp /usr/local/lib/python3.12/dist-packages/nvidia/cu12/include/curand*.h /usr/local/cuda/include/ 2>/dev/null || \
+    cp /usr/local/lib/python3.12/dist-packages/nvidia/cu13/include/curand*.h /usr/local/cuda/include/ 2>/dev/null || \
+    echo "curand headers not found in expected locations"
+
+# 验证 curand 头文件
+RUN ls -la /usr/local/cuda/include/curand*.h && \
+    echo "✓ curand headers installed"
+
+# 验证 FlashInfer 导入
+RUN python3 -c "from flashinfer.comm import fd_exchange; print('✓ FlashInfer import OK')"
+
+ENV CUDA_HOME=/usr/local/cuda

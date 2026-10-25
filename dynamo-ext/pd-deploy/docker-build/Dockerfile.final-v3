@@ -1,0 +1,22 @@
+FROM nvcr.io/nvidia/ai-dynamo/vllm-runtime:with-curand
+
+USER root
+
+# 创建 CUDA include 目录
+RUN mkdir -p /usr/local/cuda/include
+
+# 复制所有 curand 头文件（而不是符号链接，因为符号链接的目标在运行时可能不可用）
+RUN cp /usr/local/lib/python3.10/dist-packages/nvidia/cu13/include/curand*.h /usr/local/cuda/include/ && \
+    ls -la /usr/local/cuda/include/curand*.h | wc -l
+
+# 修补 FlashInfer 类型注解
+RUN sed -i '1i from __future__ import annotations' \
+    /usr/local/lib/python3.10/dist-packages/flashinfer/comm/fd_exchange.py && \
+    head -2 /usr/local/lib/python3.10/dist-packages/flashinfer/comm/fd_exchange.py
+
+# 验证
+RUN python3 -c "from flashinfer.comm import fd_exchange; print('✓ FlashInfer import OK')" && \
+    ls /usr/local/cuda/include/curand_kernel.h && \
+    echo "✓ All curand headers present"
+
+ENV CUDA_HOME=/usr/local/cuda
