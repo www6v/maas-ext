@@ -1,108 +1,83 @@
-# Dynamo vLLM PD 分离部署（vGPU Time-Slicing 方案）
+# PD 分离部署指南
 
-## 目标
+## 项目概述
 
-在单张 RTX 3090 上，通过 GPU time-slicing 虚拟化出 2 个 vGPU，运行 Dynamo vLLM PD 分离部署（`disagg.yaml`），验证 K8s 部署流程。
+使用 vGPU time-slicing 方案在单卡 RTX 3090 上部署 Dynamo vLLM PD 分离。
 
-## 环境要求
+## 当前状态
 
-- ✅ minikube（已安装，v1.28.0）
-- ✅ RTX 3090 24GB（单卡）
-- ✅ NVIDIA GPU Operator（minikube 插件已启用）
-- ⚠️ 网络：需要能访问 Docker Hub / quay.io（etcd 镜像）
-- ❌ 镜像：`nvcr.io/nvidia/ai-dynamo/vllm-runtime:my-tag` 需要从国内镜像或源码构建
+- ✅ K8s 基础设施：100% 完成
+- ✅ 镜像构建：100% 完成（Python 3.12 + curand）
+- ❌ 端到端推理：因磁盘空间不足未完成
 
-## 部署步骤
+详细状态见 [SUMMARY.md](./SUMMARY.md)
 
-### 快速开始
+## 快速开始
 
+### 1. 启动 minikube
 ```bash
-cd /home/wangwei/wei/workspacePy/maas/maas-ext/dynamo-ext/pd-deploy
+minikube start --driver=docker --kubernetes-version=v1.30.0
+```
+
+### 2. 配置 vGPU
+```bash
+bash setup-vgpu.sh
+```
+
+### 3. 部署基础设施
+```bash
+bash setup-infra.sh
+```
+
+### 4. 加载镜像
+```bash
+docker save nvcr.io/nvidia/ai-dynamo/vllm-runtime:py312-curand | minikube image load -
+```
+
+### 5. 部署 workers
+```bash
 bash deploy.sh
 ```
 
-### 手动步骤
-
-详见 [deploy.sh](./deploy.sh) 中的注释。
-
-## 核心概念
-
-### vGPU Time-Slicing
-
-NVIDIA GPU time-slicing 允许将单个物理 GPU 暴露为多个虚拟 GPU：
-
-```
-物理 GPU (RTX 3090, 24GB)
-    ├── vGPU 0 (12GB 等效)  → prefill worker pod
-    └── vGPU 1 (12GB 等效)  → decode worker pod
-```
-
-**关键特点**：
-- 两个 vGPU **共享**物理显存（总 24GB，不是各 24GB）
-- 计算通过时间分片复用（不是真正的隔离）
-- 适合验证 K8s 拓扑，**不适合性能测试**
-
-### PD 分离拓扑
-
-```
-┌─────────────┐
-│  Frontend   │  (HTTP ingress)
-└──────┬──────┘
-       │
-   ┌───┴────┐
-   │        │
-   ▼        ▼
-┌──────┐ ┌──────┐
-│Prefill│ │Decode│  ← 2 个 vGPU（同一物理卡）
-│Worker │ │Worker│
-└──────┘ └──────┘
-   │        │
-   └──NIXL──┘  (KV cache transfer, CUDA IPC)
-```
-
-## 已知问题
-
-详见 [troubleshooting.md](./troubleshooting.md)
-
-## 验证清单
-
-- [ ] minikube 运行，GPU 可见
-- [ ] vGPU time-slicing 配置，`kubectl describe node` 显示 `nvidia.com/gpu: 2`
-- [ ] NATS + etcd 部署，Service 可达
-- [ ] Dynamo Operator 安装，CRD 注册
-- [ ] DGD 提交，Operator reconcile 成功
-- [ ] 3 个 pods (frontend, prefill, decode) Running
-- [ ] 每个 worker pod 分配到 1 个 vGPU
-- [ ] Worker 注册到 NATS
-- [ ] Frontend 发现 PrefillRouter
-- [ ] 端到端请求（需要可用的 vLLM + Dynamo 镜像）
-
-## 文件说明
-
-| 文件 | 说明 |
-|---|---|
-| `deploy.sh` | 主部署脚本 |
-| `troubleshooting.md` | 遇到的问题及解决方案 |
-| `cleanup.sh` | 清理部署 |
-| `verify.sh` | 端到端验证脚本 |
-
-## 常用命令
-
+### 6. 验证
 ```bash
-# 查看 DGD 状态
-kubectl -n dynamo-system get dgd
-
-# 查看 pods
-kubectl -n dynamo-system get pods -o wide
-
-# 查看日志
-kubectl -n dynamo-system logs -f deploy/vllm-disagg-frontend
-kubectl -n dynamo-system logs -f deploy/vllm-disagg-prefill
-kubectl -n dynamo-system logs -f deploy/vllm-disagg-decode
-
-# 删除部署
-kubectl -n dynamo-system delete dgd vllm-disagg
-
-# 清理所有
-bash cleanup.sh
+bash verify-e2e.sh
 ```
+
+## 文档
+
+- [SUMMARY.md](./SUMMARY.md) - 当前状态总结
+- [troubleshooting.md](./troubleshooting.md) - 问题诊断
+- [deploy.sh](./deploy.sh) - 部署脚本
+- [setup-vgpu.sh](./setup-vgpu.sh) - vGPU 配置脚本
+
+## 关键发现
+
+1. **Python 3.12 是正确选择** - 解决了所有 FlashInfer 兼容性问题
+2. **vGPU time-slicing 有显存限制** - 不适合大模型 PD 分离
+3. **磁盘空间管理很重要** - 需要预留足够空间
+
+## 文件
+
+### 文档
+- `README.md` - 本文件
+- `SUMMARY.md` - 当前状态总结
+- `troubleshooting.md` - 问题诊断
+
+### 脚本
+- `deploy.sh` - 主部署脚本
+- `setup-infra.sh` - 基础设施部署（NATS + etcd）
+- `setup-vgpu.sh` - vGPU time-slicing 配置
+- `verify-e2e.sh` - 端到端验证
+- `test-vgpu-scheduling.sh` - vGPU 调度测试
+- `cleanup.sh` - 清理资源
+
+### Dockerfile
+- `docker-build/Dockerfile.py312` - Python 3.12 基础镜像
+- `docker-build/Dockerfile.py312-curand` - Python 3.12 + curand（推荐）
+
+## 参考
+
+- [Dynamo 官方文档](https://docs.nvidia.com/dynamo/)
+- [vGPU Time-Slicing](https://gitlab.com/nvidia/kubernetes/device-plugin/-/tree/main)
+- [PD 分离分析](/home/wangwei/wei/workspacePy/maas/maas-ext/dynamo-ext/pd-disaggregated/)

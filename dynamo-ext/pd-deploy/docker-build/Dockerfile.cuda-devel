@@ -1,0 +1,55 @@
+# 使用包含完整 CUDA toolkit 的基础镜像
+FROM nvidia/cuda:12.1.1-devel-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_PROXY=http://127.0.0.1:7897
+
+# 1. 安装系统依赖
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-dev \
+    ninja-build \
+    curl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3 /usr/bin/python
+
+# 2. 验证 CUDA toolkit
+RUN nvcc --version && echo "✓ CUDA toolkit installed"
+
+# 3. 升级 pip
+RUN python3 -m pip install --upgrade pip setuptools wheel
+
+# 4. 安装 vLLM
+RUN python3 -m pip install --proxy=$PIP_PROXY --no-cache-dir vllm==0.28.0
+
+# 5. 安装 Dynamo + 依赖
+RUN python3 -m pip install --proxy=$PIP_PROXY --no-cache-dir \
+    ai-dynamo==1.6.0 \
+    ai-dynamo-runtime==1.6.0 \
+    nixl \
+    pyzmq \
+    msgspec \
+    kubernetes \
+    prometheus_client \
+    huggingface_hub \
+    transformers
+
+# 6. 修补 FlashInfer 类型注解问题
+RUN sed -i '1i from __future__ import annotations' \
+    /usr/local/lib/python3.10/dist-packages/flashinfer/comm/fd_exchange.py || \
+    sed -i '1i from __future__ import annotations' \
+    /usr/local/lib/python3.11/dist-packages/flashinfer/comm/fd_exchange.py || \
+    echo "FlashInfer patch skipped (file not found)"
+
+# 7. 验证
+RUN python3 -c "import vllm; print('vLLM:', vllm.__version__)" && \
+    python3 -c "import dynamo; print('Dynamo: OK')" && \
+    python3 -c "import nixl; print('NIXL: OK')" && \
+    ninja --version && \
+    nvcc --version && \
+    echo "✓ Build successful - CUDA toolkit, ninja, and nvcc available!"
+
+WORKDIR /workspace
+CMD ["bash"]
