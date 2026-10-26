@@ -1,0 +1,150 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-disagg-frontend
+  namespace: dynamo-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-disagg-frontend
+  template:
+    metadata:
+      labels:
+        app: vllm-disagg-frontend
+    spec:
+      containers:
+      - name: main
+        image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:final-complete-v7-vllm031
+        imagePullPolicy: Never
+        command: ["python3", "-m", "dynamo.frontend"]
+        args:
+        - --namespace
+        - dynamo-system
+        - --discovery-backend
+        - etcd
+        env:
+        - name: ETCD_ENDPOINTS
+          value: http://etcd:2379
+        - name: DYN_NAMESPACE
+          value: "dynamo"
+        ports:
+        - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-disagg-frontend
+  namespace: dynamo-system
+spec:
+  selector:
+    app: vllm-disagg-frontend
+  ports:
+  - port: 8000
+    targetPort: 8000
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-disagg-prefill
+  namespace: dynamo-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-disagg-prefill
+  template:
+    metadata:
+      labels:
+        app: vllm-disagg-prefill
+    spec:
+      containers:
+      - name: main
+        image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:final-complete-v7-vllm031
+        imagePullPolicy: Never
+        command: ["python3", "-m", "dynamo.vllm"]
+        args:
+        - --namespace
+        - dynamo-system
+        - --discovery-backend
+        - etcd
+        - --model
+        - Qwen/Qwen2.5-0.5B
+        - --disaggregation-mode
+        - prefill
+        - --kv-transfer-config
+        - '{"kv_connector":"NixlConnector","kv_role":"kv_producer"}'
+        - --kv-events-config
+        - '{"publisher":"zmq","topic":"kv-events","endpoint":"tcp://*:20081","enable_kv_cache_events":true}'
+        - --gpu-memory-utilization
+        - "0.45"
+        - --max-model-len
+        - "8000"
+        - --enforce-eager
+        - --trust-remote-code
+        env:
+        - name: ETCD_ENDPOINTS
+          value: http://etcd:2379
+        - name: DYN_NAMESPACE
+          value: "dynamo"
+        - name: TORCH_COMPILE_DISABLE
+          value: "1"
+        - name: VLLM_USE_FLASHINFER
+          value: "0"
+        - name: FLASHINFER_JIT_DISABLE
+          value: "1"
+        resources:
+          limits:
+            nvidia.com/gpu: "1"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-disagg-decode
+  namespace: dynamo-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-disagg-decode
+  template:
+    metadata:
+      labels:
+        app: vllm-disagg-decode
+    spec:
+      containers:
+      - name: main
+        image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:final-complete-v7-vllm031
+        imagePullPolicy: Never
+        command: ["python3", "-m", "dynamo.vllm"]
+        args:
+        - --namespace
+        - dynamo-system
+        - --discovery-backend
+        - etcd
+        - --model
+        - Qwen/Qwen2.5-0.5B
+        - --disaggregation-mode
+        - decode
+        - --kv-transfer-config
+        - '{"kv_connector":"NixlConnector","kv_role":"kv_consumer"}'
+        - --gpu-memory-utilization
+        - "0.45"
+        - --max-model-len
+        - "8000"
+        - --enforce-eager
+        - --trust-remote-code
+        env:
+        - name: ETCD_ENDPOINTS
+          value: http://etcd:2379
+        - name: DYN_NAMESPACE
+          value: "dynamo"
+        - name: TORCH_COMPILE_DISABLE
+          value: "1"
+        - name: VLLM_USE_FLASHINFER
+          value: "0"
+        - name: FLASHINFER_JIT_DISABLE
+          value: "1"
+        resources:
+          limits:
+            nvidia.com/gpu: "1"

@@ -1,0 +1,106 @@
+apiVersion: nvidia.com/v1beta1
+kind: DynamoGraphDeployment
+metadata:
+  name: vllm-disagg
+  namespace: dynamo-system
+spec:
+  components:
+  - name: Frontend
+    podTemplate:
+      spec:
+        containers:
+        - image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:final-complete
+          name: main
+          imagePullPolicy: Never
+    replicas: 1
+    type: frontend
+  - name: decode
+    podTemplate:
+      spec:
+        containers:
+        - args:
+          - --model
+          - /models/Qwen3-0.6B
+          - --disaggregation-mode
+          - decode
+          - --kv-transfer-config
+          - '{"kv_connector":"NixlConnector","kv_role":"kv_consumer"}'
+          - --gpu-memory-utilization
+          - "0.45"
+          - --max-model-len
+          - "8000"
+          - --enforce-eager
+          - --trust-remote-code
+          command:
+          - python3
+          - -m
+          - dynamo.vllm
+          env:
+          - name: ETCD_ENDPOINTS
+            value: http://etcd:2379
+          - name: TORCH_COMPILE_DISABLE
+            value: "1"
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:final-complete
+          imagePullPolicy: Never
+          name: main
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+            requests:
+              ephemeral-storage: 2Gi
+          volumeMounts:
+          - name: model-volume
+            mountPath: /models
+            readOnly: true
+        volumes:
+        - name: model-volume
+          hostPath:
+            path: /models
+            type: Directory
+    replicas: 1
+    type: decode
+  - name: prefill
+    podTemplate:
+      spec:
+        containers:
+        - args:
+          - --model
+          - /models/Qwen3-0.6B
+          - --disaggregation-mode
+          - prefill
+          - --kv-transfer-config
+          - '{"kv_connector":"NixlConnector","kv_role":"kv_producer"}'
+          - --gpu-memory-utilization
+          - "0.45"
+          - --max-model-len
+          - "8000"
+          - --enforce-eager
+          - --trust-remote-code
+          command:
+          - python3
+          - -m
+          - dynamo.vllm
+          env:
+          - name: ETCD_ENDPOINTS
+            value: http://etcd:2379
+          - name: TORCH_COMPILE_DISABLE
+            value: "1"
+          image: nvcr.io/nvidia/ai-dynamo/vllm-runtime:final-complete
+          imagePullPolicy: Never
+          name: main
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+            requests:
+              ephemeral-storage: 2Gi
+          volumeMounts:
+          - name: model-volume
+            mountPath: /models
+            readOnly: true
+        volumes:
+        - name: model-volume
+          hostPath:
+            path: /models
+            type: Directory
+    replicas: 1
+    type: prefill

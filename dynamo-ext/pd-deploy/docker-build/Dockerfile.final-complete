@@ -1,0 +1,77 @@
+# Python 3.12 + nvcc + curand 完整镜像
+FROM nvidia/cuda:12.1.1-nvcc-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PIP_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 1. 安装 Python 3.12
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    software-properties-common \
+    curl \
+    ca-certificates \
+    gnupg \
+    && add-apt-repository ppa:deadsnakes/ppa \
+    && apt-get update && apt-get install -y --no-install-recommends \
+    python3.12 \
+    python3.12-dev \
+    python3.12-venv \
+    python3-pip \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -sf /usr/bin/python3.12 /usr/bin/python3 \
+    && ln -sf /usr/bin/python3.12 /usr/bin/python
+
+# 2. 验证 nvcc
+RUN nvcc --version && echo "✓ nvcc available"
+
+# 3. 使用 get-pip.py 安装 pip
+RUN curl -sS https://bootstrap.pypa.io/get-pip.py | python3 && \
+    python3 -m pip install --no-cache-dir -i $PIP_INDEX_URL setuptools wheel
+
+# 4. 安装 vLLM
+RUN python3 -m pip install --no-cache-dir -i $PIP_INDEX_URL vllm==0.28.0
+
+# 4.1 修复 TVM FFI 头文件（解决 FlashInfer JIT 编译错误：namespace "std" has no member "strlen"）
+RUN TVM_FFI_STRING_H="/usr/local/lib/python3.12/dist-packages/tvm_ffi/include/tvm/ffi/string.h" && \
+    if [ -f "$TVM_FFI_STRING_H" ]; then \
+        sed -i '1i #include <cstring>' "$TVM_FFI_STRING_H" && \
+        echo "✓ TVM FFI string.h patched"; \
+    else \
+        echo "TVM FFI string.h not found, skipping patch"; \
+    fi
+
+# 5. 安装 Dynamo（使用 PyPI 作为备用源，因为清华源缺少 aisimulate 等包）
+RUN python3 -m pip install --no-cache-dir \
+    -i $PIP_INDEX_URL \
+    --extra-index-url https://pypi.org/simple \
+    ai-dynamo==1.6.0 \
+    ai-dynamo-runtime==1.6.0 \
+    nixl \
+    pyzmq \
+    msgspec \
+    kubernetes \
+    prometheus_client \
+    huggingface_hub \
+    transformers
+
+# 6. 添加 curand 头文件
+RUN mkdir -p /usr/local/cuda/include && \
+    cp /usr/local/lib/python3.12/dist-packages/nvidia/cuda_nvcc/include/curand*.h /usr/local/cuda/include/ 2>/dev/null || \
+    cp /usr/local/lib/python3.12/dist-packages/nvidia/cu12/include/curand*.h /usr/local/cuda/include/ 2>/dev/null || \
+    cp /usr/local/lib/python3.12/dist-packages/nvidia/cu13/include/curand*.h /usr/local/cuda/include/ 2>/dev/null || \
+    echo "curand headers will be available through pip packages"
+
+# 7. 验证所有组件
+RUN python3 -c "import vllm; print('vLLM:', vllm.__version__)" && \
+    python3 -c "import dynamo; print('Dynamo: OK')" && \
+    python3 -c "import nixl; print('NIXL: OK')" && \
+    nvcc --version && \
+    python3 --version && \
+    ls /usr/local/cuda/include/curand*.h && \
+    echo "✓ Build successful!"
+
+WORKDIR /workspace
+ENV HF_HOME=/tmp/hf_cache
+ENV VLLM_WORKER_MULTIPROC_METHOD=spawn
+ENV CUDA_HOME=/usr/local/cuda
+
+CMD ["bash"]
