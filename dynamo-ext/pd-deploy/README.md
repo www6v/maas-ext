@@ -10,7 +10,7 @@
 - ✅ 镜像构建：100% 完成（Python 3.12 + vLLM 0.31.0 + Dynamo 1.6.0）
 - ✅ 端到端推理：100% 完成（HTTP 200）
 
-详细状态见 [FINAL-PROJECT-REPORT-2026-10-26.md](./FINAL-PROJECT-REPORT-2026-10-26.md)
+详细状态见 [report/FINAL-PROJECT-REPORT-2026-10-26.md](./report/FINAL-PROJECT-REPORT-2026-10-26.md)
 
 ## 快速开始
 
@@ -61,9 +61,9 @@ bash shell/06-verify-e2e.sh
 
 ## 文档
 
-- [FINAL-PROJECT-REPORT-2026-10-26.md](./FINAL-PROJECT-REPORT-2026-10-26.md) - 最终项目报告
-- [PROBLEMS-SOLUTIONS.md](./PROBLEMS-SOLUTIONS.md) - 12 个问题详解
-- [troubleshooting.md](./troubleshooting.md) - 问题诊断
+- [report/FINAL-PROJECT-REPORT-2026-10-26.md](./report/FINAL-PROJECT-REPORT-2026-10-26.md) - 最终项目报告
+- [report/PROBLEMS-SOLUTIONS.md](./report/PROBLEMS-SOLUTIONS.md) - 13 个问题详解
+- [report/troubleshooting.md](./report/troubleshooting.md) - 问题诊断
 
 ## 关键发现
 
@@ -75,33 +75,24 @@ bash shell/06-verify-e2e.sh
 
 ## 文件结构
 
-### 文档
 ```
 pd-deploy/
 ├── README.md                              # 本文件
-├── FINAL-PROJECT-REPORT-2026-10-26.md     # 最终项目报告
-├── PROBLEMS-SOLUTIONS.md                  # 12 个问题详解
-└── troubleshooting.md                     # 问题诊断
-```
-
-### 脚本（按执行顺序）
-```
-pd-deploy/shell/
-── 01-cleanup.sh              # 清理旧资源
-├── 02-setup-vgpu.sh           # 配置 vGPU time-slicing
-├── 03-setup-infra.sh          # 部署基础设施 (NATS, etcd)
-├── 04-deploy.sh               # 主部署脚本
-├── 05-test-vgpu-scheduling.sh # 测试 vGPU 调度
-└── 06-verify-e2e.sh           # 端到端验证
-```
-
-### 配置
-```
-pd-deploy/
-── manual-deploy.yaml                     # K8s 部署配置（最终使用）
-├── disagg-final.yaml                      # DGD 配置
+├── report/
+│   ├── FINAL-PROJECT-REPORT-2026-10-26.md # 最终项目报告
+│   ├── PROBLEMS-SOLUTIONS.md              # 13 个问题详解
+│   └── troubleshooting.md                 # 问题诊断
+├── shell/
+│   ├── 01-cleanup.sh                      # 清理旧资源
+│   ├── 02-setup-vgpu.sh                   # 配置 vGPU time-slicing
+│   ├── 03-setup-infra.sh                  # 部署基础设施 (NATS, etcd)
+│   ├── 04-deploy.sh                       # 主部署脚本
+│   ├── 05-test-vgpu-scheduling.sh         # 测试 vGPU 调度
+│   ├── 06-verify-e2e.sh                   # 端到端验证
+│   ├── disagg-final.yaml                  # DGD 配置
+│   └── manual-deploy.yaml                 # K8s 部署配置
 └── docker-build/
-    ── Dockerfile.final-complete          # 完整镜像 Dockerfile
+    └── Dockerfile.final-complete          # 完整镜像 Dockerfile
 ```
 
 ## 技术栈
